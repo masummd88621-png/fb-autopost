@@ -11,14 +11,22 @@ API = f"https://graph.facebook.com/v21.0/{PAGE_ID}/feed"
 
 
 def fetch_items():
-    req = urllib.request.Request(RSS_URL, headers={"User-Agent": "Mozilla/5.0"})
-    root = ET.fromstring(urllib.request.urlopen(req, timeout=30).read())
     items = []
-    for it in root.iter("item"):
-        title = (it.findtext("title") or "").strip()
-        link = (it.findtext("link") or "").strip()
-        if link:
-            items.append({"title": title, "link": link})
+    for url in RSS_URL.replace("\n", ",").split(","):
+        url = url.strip()
+        if not url:
+            continue
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            root = ET.fromstring(urllib.request.urlopen(req, timeout=30).read())
+        except Exception as e:
+            print("RSS error:", url, e)
+            continue
+        for it in root.iter("item"):
+            title = (it.findtext("title") or "").strip()
+            link = (it.findtext("link") or "").strip()
+            if link:
+                items.append({"title": title, "link": link})
     return items
 
 
@@ -45,7 +53,7 @@ def main():
     new = [i for i in items if i["link"] not in posted]
 
     if first_run:
-        to_post = new[:1]
+        to_post = new[:2]
         posted.update(i["link"] for i in new)
     else:
         to_post = list(reversed(new))[:MAX_PER_RUN]
