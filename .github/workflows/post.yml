@@ -7,12 +7,17 @@ permissions:
   contents: write
 jobs:
   post:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install fonts and libs
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y fonts-noto-core libraqm0
+          pip install pillow numpy requests
       - run: python post.py
         env:
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
