@@ -1,4 +1,4 @@
-import os, io, re, json, glob
+import os, io, re, json, glob, html
 from urllib.parse import urlparse
 import xml.etree.ElementTree as ET
 import requests
@@ -44,14 +44,21 @@ def find_image(it, link):
     if m:
         return m.group(1).replace("&amp;", "&")
     try:
-        html = requests.get(link, headers=UA, timeout=30).text
-        m = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)', html) or \
-            re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image', html)
+        page = requests.get(link, headers=UA, timeout=30).text
+        m = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)', page) or \
+            re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image', page)
         if m:
             return m.group(1).replace("&amp;", "&")
     except Exception as e:
         print("og:image error:", e)
     return None
+
+
+def parse_xml(raw):
+    txt = raw.decode("utf-8", "replace").lstrip("\ufeff")
+    txt = re.sub(r"^\s*<\?xml[^>]*\?>", "", txt)
+    txt = re.sub(r"&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)", "&amp;", txt)
+    return ET.fromstring(txt.encode("utf-8"))
 
 
 def fetch_items():
@@ -61,12 +68,12 @@ def fetch_items():
         if not url:
             continue
         try:
-            root = ET.fromstring(requests.get(url, headers=UA, timeout=30).content)
+            root = parse_xml(requests.get(url, headers=UA, timeout=30).content)
         except Exception as e:
             print("RSS error:", url, e)
             continue
         for it in root.iter("item"):
-            title = (it.findtext("title") or "").strip()
+            title = html.unescape(it.findtext("title") or "").replace("\xa0", " ").strip()
             link = (it.findtext("link") or "").strip()
             if link:
                 items.append({"title": title, "link": link, "_it": it})
@@ -86,8 +93,17 @@ def find_font():
     raise RuntimeError("Bengali font pawa jayni")
 
 
+def find_template():
+    if os.path.exists(TEMPLATE):
+        return TEMPLATE
+    c = sorted(glob.glob("template*")) + sorted(glob.glob("*.jp*g")) + sorted(glob.glob("*.png"))
+    if c:
+        return c[0]
+    raise RuntimeError("template.jpg repo te nei, upload koro")
+
+
 def load_template():
-    im = Image.open(TEMPLATE).convert("RGB")
+    im = Image.open(find_template()).convert("RGB")
     im = im.resize((int(im.width * SCALE), int(im.height * SCALE)), Image.LANCZOS)
     a = np.array(im).astype(int)
     r, g, b = a[..., 0], a[..., 1], a[..., 2]
@@ -186,7 +202,7 @@ def main():
         if post(it):
             posted.add(it["link"])
             print("Posted:", it["title"])
-        elif not first_run:
+        else:
             posted.discard(it["link"])
     json.dump(sorted(posted), open(STATE, "w"), indent=1, ensure_ascii=False)
 
