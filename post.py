@@ -17,9 +17,9 @@ GRAPH = f"https://graph.facebook.com/v21.0/{PAGE_ID}"
 UA = {"User-Agent": "Mozilla/5.0"}
 
 # ---- Caption template: nijer moto change koro ----
-CAPTION = "{title}\n\n📰 বিস্তারিত: {link}\n\nসূত্র: {source}\n\n#Star7News #স্টার৭নিউজ"
+CAPTION = "{title}\n\n#Star7News #স্টার৭নিউজ"
 
-SOURCES = {"prothomalo.com": "প্রথম আলো", "kalerkantho.com": "কালের কণ্ঠ"}
+SOURCES = {"prothomalo.com": "প্রথম আলো", "jagonews24.com": "জাগো নিউজ", "banglatribune.com": "বাংলা ট্রিবিউন"}
 
 
 def source_name(link):
