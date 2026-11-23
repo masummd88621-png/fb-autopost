@@ -61,17 +61,44 @@ def parse_xml(raw):
     return ET.fromstring(txt.encode("utf-8"))
 
 
+def parse_loose(raw):
+    """XML bhanga hole regex diye <item> gulo ber kore (fallback)."""
+    txt = raw.decode("utf-8", "replace")
+    root = ET.Element("rss")
+    for blk in re.findall(r"<item\b.*?</item>", txt, re.S | re.I):
+        def tag(n):
+            m = re.search(r"<%s\b[^>]*>(.*?)</%s>" % (n, n), blk, re.S | re.I)
+            if not m:
+                return ""
+            v = m.group(1).strip()
+            c = re.match(r"<!\[CDATA\[(.*?)\]\]>$", v, re.S)
+            return (c.group(1) if c else v).strip()
+        it = ET.SubElement(root, "item")
+        ET.SubElement(it, "title").text = html.unescape(re.sub(r"<[^>]+>", "", tag("title")))
+        ET.SubElement(it, "link").text = html.unescape(tag("link"))
+        m = re.search(r'<(?:enclosure|media:content|media:thumbnail)[^>]+url=["\']([^"\']+)', blk, re.I)
+        if m:
+            ET.SubElement(it, "enclosure", url=html.unescape(m.group(1)), type="image/jpeg")
+        else:
+            m = re.search(r'<img[^>]+src=["\']([^"\']+)', html.unescape(blk), re.I)
+            if m:
+                ET.SubElement(it, "enclosure", url=m.group(1), type="image/jpeg")
+    return root
+
+
 def fetch_items():
     items = []
     for url in RSS_URL.replace("\n", ",").split(","):
         url = url.strip()
         if not url:
             continue
+        raw = b""
         try:
-            root = parse_xml(requests.get(url, headers=UA, timeout=30).content)
+            raw = requests.get(url, headers=UA, timeout=30).content
+            root = parse_xml(raw)
         except Exception as e:
-            print("RSS error:", url, e)
-            continue
+            print("RSS parse error, loose mode:", url, e, "| shuru:", raw[:80])
+            root = parse_loose(raw)
         for it in root.iter("item"):
             title = html.unescape(it.findtext("title") or "").replace("\xa0", " ").strip()
             link = (it.findtext("link") or "").strip()
