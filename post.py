@@ -166,46 +166,30 @@ def make_card(photo_bytes, headline):
 
 
 # ---------------- Facebook ----------------
-def post(item):
-    caption = CAPTION.format(title=item["title"], link=item["link"], source=source_name(item["link"]))
+def resolve_token():
+    """User token dile me/accounts theke Page token nijei ber kore; Page token hole oi-i use kore."""
+    global TOKEN
     try:
-        img_url = find_image(item["_it"], item["link"])
-        if img_url:
-            photo = requests.get(img_url, headers=UA, timeout=30).content
-            card = make_card(photo, item["title"])
-            r = requests.post(f"{GRAPH}/photos",
-                              data={"caption": caption, "access_token": TOKEN},
-                              files={"source": ("card.jpg", card, "image/jpeg")}, timeout=60)
+        r = requests.get("https://graph.facebook.com/v21.0/me/accounts",
+                         params={"access_token": TOKEN, "limit": 100}, timeout=30).json()
+        if "data" in r:
+            for p in r["data"]:
+                if p.get("id") == PAGE_ID and p.get("access_token"):
+                    TOKEN = p["access_token"]
+                    print("OK: me/accounts theke Page token niyechi")
+                    return
+            print("WARN: token e", len(r["data"]), "ta Page ache, kintu Page ID", PAGE_ID, "nei")
         else:
-            print("Chhobi pawa jayni, link post korchi:", item["title"])
-            r = requests.post(f"{GRAPH}/feed",
-                              data={"message": caption, "link": item["link"], "access_token": TOKEN},
-                              timeout=30)
-        print("Response:", r.status_code, r.text[:300])
-        return r.ok
+            print("Token ta already Page token (ba me/accounts nei):", (r.get("error") or {}).get("message", "")[:120])
     except Exception as e:
-        print("FAILED:", item["title"], repr(e))
-        return False
+        print("resolve_token error:", repr(e))
+    try:
+        c = requests.get(f"https://graph.facebook.com/v21.0/{PAGE_ID}",
+                         params={"fields": "id,name", "access_token": TOKEN}, timeout=30).json()
+        print("Page check:", c if "id" in c else (c.get("error") or {}).get("message", c))
+    except Exception as e:
+        print("page check error:", repr(e))
 
 
-def main():
-    print("raqm:", features.check("raqm"), "| font:", find_font())
-    first_run = not os.path.exists(STATE)
-    posted = set(json.load(open(STATE))) if not first_run else set()
-    new = [i for i in fetch_items() if i["link"] not in posted]
-    if first_run:
-        to_post = new[:FIRST_RUN_POSTS]
-        posted.update(i["link"] for i in new)
-    else:
-        to_post = list(reversed(new))[:MAX_PER_RUN]
-    for it in to_post:
-        if post(it):
-            posted.add(it["link"])
-            print("Posted:", it["title"])
-        else:
-            posted.discard(it["link"])
-    json.dump(sorted(posted), open(STATE, "w"), indent=1, ensure_ascii=False)
-
-
-if __name__ == "__main__":
-    main()
+def post(item):
+    caption = CAPTION.format(title=item["title"], link=item["link"], source=source_name(item["link"
