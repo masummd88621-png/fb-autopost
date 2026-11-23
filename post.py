@@ -192,4 +192,46 @@ def resolve_token():
 
 
 def post(item):
-    caption = CAPTION.format(title=item["title"], link=item["link"], source=source_name(item["link"
+    caption = CAPTION.format(title=item["title"], link=item["link"], source=source_name(item["link"]))
+    try:
+        img_url = find_image(item["_it"], item["link"])
+        if img_url:
+            photo = requests.get(img_url, headers=UA, timeout=30).content
+            card = make_card(photo, item["title"])
+            r = requests.post(f"{GRAPH}/photos",
+                              data={"caption": caption, "access_token": TOKEN},
+                              files={"source": ("card.jpg", card, "image/jpeg")}, timeout=60)
+        else:
+            print("Chhobi pawa jayni, link post korchi:", item["title"])
+            r = requests.post(f"{GRAPH}/feed",
+                              data={"message": caption, "link": item["link"], "access_token": TOKEN},
+                              timeout=30)
+        print("Response:", r.status_code, r.text[:300])
+        return r.ok
+    except Exception as e:
+        print("FAILED:", item["title"], repr(e))
+        return False
+
+
+def main():
+    print("raqm:", features.check("raqm"), "| font:", find_font())
+    resolve_token()
+    first_run = not os.path.exists(STATE)
+    posted = set(json.load(open(STATE))) if not first_run else set()
+    new = [i for i in fetch_items() if i["link"] not in posted]
+    if first_run:
+        to_post = new[:FIRST_RUN_POSTS]
+        posted.update(i["link"] for i in new)
+    else:
+        to_post = list(reversed(new))[:MAX_PER_RUN]
+    for it in to_post:
+        if post(it):
+            posted.add(it["link"])
+            print("Posted:", it["title"])
+        else:
+            posted.discard(it["link"])
+    json.dump(sorted(posted), open(STATE, "w"), indent=1, ensure_ascii=False)
+
+
+if __name__ == "__main__":
+    main()
